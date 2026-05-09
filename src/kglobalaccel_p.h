@@ -10,6 +10,7 @@
 #ifndef KGLOBALACCEL_P_H
 #define KGLOBALACCEL_P_H
 
+#include <QDBusConnection>
 #include <QHash>
 #include <QKeySequence>
 #include <QList>
@@ -102,6 +103,7 @@ public:
     void setInactive(const QStringList &actionId);
 
 private:
+    QDBusConnection m_bus;
     org::kde::KGlobalAccel *m_iface = nullptr;
     QPointer<QAction> m_lastActivatedAction;
     QDBusServiceWatcher *m_watcher;

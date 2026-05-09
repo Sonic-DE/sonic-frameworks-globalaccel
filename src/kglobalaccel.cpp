@@ -52,11 +52,11 @@ org::kde::kglobalaccel::Component *KGlobalAccelPrivate::getComponent(const QStri
 
     // Now get the component
     org::kde::kglobalaccel::Component *component =
-        new org::kde::kglobalaccel::Component(QStringLiteral("org.kde.kglobalaccel"), reply.value().path(), QDBusConnection::sessionBus(), q);
+        new org::kde::kglobalaccel::Component(QStringLiteral("org.kde.kglobalaccel"), reply.value().path(), m_bus, q);
 
     // No component no cleaning
     if (!component->isValid()) {
-        qCDebug(KGLOBALACCEL_LOG) << "Failed to get component" << componentUnique << QDBusConnection::sessionBus().lastError();
+        qCDebug(KGLOBALACCEL_LOG) << "Failed to get component" << componentUnique << m_bus.lastError();
         return nullptr;
     }
 
@@ -108,8 +108,14 @@ void KGlobalAccelPrivate::cleanup()
 
 KGlobalAccelPrivate::KGlobalAccelPrivate(KGlobalAccel *qq)
     : q(qq)
+    , m_bus(QDBusConnection::sessionBus())
 {
-    m_watcher = new QDBusServiceWatcher(serviceName(), QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForOwnerChange, q);
+    auto kglobalaccelInternalBus = QDBusConnection(QStringLiteral("kglobalacceld"));
+    if (kglobalaccelInternalBus.isConnected()) {
+        m_bus = kglobalaccelInternalBus;
+    }
+
+    m_watcher = new QDBusServiceWatcher(serviceName(), m_bus, QDBusServiceWatcher::WatchForOwnerChange, q);
     QObject::connect(m_watcher,
                      &QDBusServiceWatcher::serviceOwnerChanged,
                      q,
@@ -121,11 +127,11 @@ KGlobalAccelPrivate::KGlobalAccelPrivate(KGlobalAccel *qq)
 org::kde::KGlobalAccel *KGlobalAccelPrivate::iface()
 {
     if (!m_iface) {
-        m_iface = new org::kde::KGlobalAccel(serviceName(), QStringLiteral("/kglobalaccel"), QDBusConnection::sessionBus());
+        m_iface = new org::kde::KGlobalAccel(serviceName(), QStringLiteral("/kglobalaccel"), m_bus);
         // Make sure kglobalaccel is running. The iface declaration above somehow works anyway.
-        QDBusConnectionInterface *bus = QDBusConnection::sessionBus().interface();
-        if (bus && !bus->isServiceRegistered(serviceName())) {
-            QDBusReply<void> reply = bus->startService(serviceName());
+        QDBusConnectionInterface *busInterface = m_bus.interface();
+        if (busInterface && !busInterface->isServiceRegistered(serviceName())) {
+            QDBusReply<void> reply = busInterface->startService(serviceName());
             if (!reply.isValid()) {
                 qCritical() << "Couldn't start kglobalaccel from org.kde.kglobalaccel.service:" << reply.error();
             }
@@ -282,7 +288,7 @@ void KGlobalAccelPrivate::unregister(const QStringList &actionId)
     auto message = QDBusMessage::createMethodCall(iface()->service(), iface()->path(), iface()->interface(), QStringLiteral("unregister"));
     message.setArguments({component, action});
     message.setAutoStartService(false);
-    QDBusConnection::sessionBus().asyncCall(message);
+    m_bus.asyncCall(message);
 }
 
 void KGlobalAccelPrivate::setInactive(const QStringList &actionId)
@@ -290,7 +296,7 @@ void KGlobalAccelPrivate::setInactive(const QStringList &actionId)
     auto message = QDBusMessage::createMethodCall(iface()->service(), iface()->path(), iface()->interface(), QStringLiteral("setInactive"));
     message.setArguments({actionId});
     message.setAutoStartService(false);
-    QDBusConnection::sessionBus().asyncCall(message);
+    m_bus.asyncCall(message);
 }
 
 void KGlobalAccelPrivate::updateGlobalShortcut(/*const would be better*/ QAction *action,
