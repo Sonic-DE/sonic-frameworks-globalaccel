@@ -578,20 +578,20 @@ bool KGlobalAccel::promptStealShortcutSystemwide(QWidget *parent, const QList<KG
 // static
 void KGlobalAccel::stealShortcutSystemwide(const QKeySequence &seq)
 {
-    // get the shortcut, remove seq, and set the new shortcut
-    const QStringList actionId = self()->d->iface()->actionList(seq);
-    if (actionId.size() < 4) { // not a global shortcut
-        return;
-    }
-    QList<QKeySequence> sc = self()->d->iface()->shortcutKeys(actionId);
+    const auto globalShortcuts = globalShortcutsByKey(seq);
+    for (const KGlobalShortcutInfo &globalShortcut : globalShortcuts) {
+        const QStringList actionId {
+            globalShortcut.componentUniqueName(),
+            globalShortcut.uniqueName(),
+            globalShortcut.componentFriendlyName(),
+            globalShortcut.friendlyName(),
+        };
 
-    for (int i = 0; i < sc.count(); i++) {
-        if (sc[i] == seq) {
-            sc[i] = QKeySequence();
-        }
-    }
+        QList<QKeySequence> keySequences = globalShortcut.keys();
+        keySequences.removeAll(seq);
 
-    self()->d->iface()->setForeignShortcutKeys(actionId, sc);
+        self()->d->iface()->setForeignShortcutKeys(actionId, keySequences);
+    }
 }
 
 bool checkGarbageKeycode(const QList<QKeySequence> &shortcut)
